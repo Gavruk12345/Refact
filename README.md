@@ -13,10 +13,6 @@
 
 1. Клонування репозиторію:
 
-    ```sh
-    git clone https://github.com/yourusername/your-repo-name.git
-    ```
-
 2. Відкрийте Unity Hub і натисніть кнопку `Add`.
 
 3. Виберіть папку з проектом, який ви тільки що клонували.
@@ -39,13 +35,6 @@
 
 3. Натисніть `Build` і виберіть директорію для збереження білду.
 
-## Внесок
-
-Будь ласка, створюйте pull request'и для нових функцій, багфіксів або покращень.
-
-## Ліцензія
-
-Цей проект ліцензовано під MIT License - деталі дивіться у файлі `LICENSE`.
 
 ---
 
@@ -61,6 +50,19 @@ using UnityEngine;
 public class NewScript : MonoBehaviour
 {
     void Start()
+}
+```
+
+**Після**
+```csharp
+// NewScript.cs
+using UnityEngine;
+
+public class NewScript : MonoBehaviour
+{
+    void Start()
+}
+```
     {
         Debug.Log("Hello, World!");
     }
