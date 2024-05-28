@@ -248,16 +248,325 @@ private void MoveVertically(Vector2 deltaPosition)
 
 ```
 
-### Код зі "запахом" : 
+### Код зі "запахом" : Введення Null-об'єкта
+
+PlayerSpawn.cs 
 
 **До:**
 ```csharp
+using Platformer.Core;
+using Platformer.Mechanics;
+using Platformer.Model;
+using UnityEngine;
+
+namespace Platformer.Gameplay
+{
+    /// <summary>
+    /// Fired when the player is spawned after dying.
+    /// </summary>
+    public class PlayerSpawn : Simulation.Event<PlayerSpawn>
+    {
+        PlatformerModel model = Simulation.GetModel<PlatformerModel>();
+
+        public override void Execute()
+        {
+            var player = model.player;
+            if (player == null)
+            {
+                Debug.LogError("Player object is null");
+                return;
+            }
+
+            var playerCollider = player.collider2d;
+            if (playerCollider != null)
+            {
+                playerCollider.enabled = true;
+            }
+            else
+            {
+                Debug.LogError("Player collider is null");
+            }
+
+            player.controlEnabled = false;
+
+            if (player.audioSource != null && player.respawnAudio != null)
+            {
+                player.audioSource.PlayOneShot(player.respawnAudio);
+            }
+            else
+            {
+                Debug.LogWarning("AudioSource or respawnAudio is null");
+            }
+
+            player.health.Increment();
+
+            if (model.spawnPoint != null)
+            {
+                player.Teleport(model.spawnPoint.transform.position);
+            }
+            else
+            {
+                Debug.LogError("Spawn point is null");
+            }
+
+            player.jumpState = PlayerController.JumpState.Grounded;
+            player.animator.SetBool("dead", false);
+
+            var virtualCamera = model.virtualCamera;
+            if (virtualCamera != null)
+            {
+                virtualCamera.m_Follow = player.transform;
+                virtualCamera.m_LookAt = player.transform;
+            }
+            else
+            {
+                Debug.LogError("Virtual camera is null");
+            }
+
+            const float playerInputEnableDelay = 2f;
+            Simulation.Schedule<EnablePlayerInput>(playerInputEnableDelay);
+        }
+    }
+}
 
 
 ```
 
 **Після**
 ```csharp
+using Platformer.Core;
+using Platformer.Mechanics;
+using Platformer.Model;
+using UnityEngine;
+
+namespace Platformer.Gameplay
+{
+    /// <summary>
+    /// Fired when the player is spawned after dying.
+    /// </summary>
+    public class PlayerSpawn : Simulation.Event<PlayerSpawn>
+    {
+        PlatformerModel model = Simulation.GetModel<PlatformerModel>();
+
+        public override void Execute()
+        {
+            var player = model.player ?? NullPlayer.Instance;
+
+            player.collider2d.enabled = true;
+            player.controlEnabled = false;
+
+            if (player.audioSource != null && player.respawnAudio != null)
+            {
+                player.audioSource.PlayOneShot(player.respawnAudio);
+            }
+
+            player.health.Increment();
+
+            var spawnPoint = model.spawnPoint ?? NullSpawnPoint.Instance;
+            player.Teleport(spawnPoint.transform.position);
+
+            player.jumpState = PlayerController.JumpState.Grounded;
+            player.animator.SetBool("dead", false);
+
+            var virtualCamera = model.virtualCamera ?? NullVirtualCamera.Instance;
+            virtualCamera.m_Follow = player.transform;
+            virtualCamera.m_LookAt = player.transform;
+
+            const float playerInputEnableDelay = 2f;
+            Simulation.Schedule<EnablePlayerInput>(playerInputEnableDelay);
+        }
+    }
+}
+
+```
+Зменшення кількості перевірок на null: Використання Null Object патерну дозволяє уникнути численних перевірок на null, роблячи код чистішим.
+
+### Код зі "запахом" : Дублювання коду 
+
+Health.cs 
+
+**До:**
+```csharp
+using System;
+using Platformer.Gameplay;
+using UnityEngine;
+using static Platformer.Core.Simulation;
+
+namespace Platformer.Mechanics
+{
+    /// <summary>
+    /// Represents the current vital statistics of some game entity.
+    /// </summary>
+    public class Health : MonoBehaviour
+    {
+        /// <summary>
+        /// The maximum hit points for the entity.
+        /// </summary>
+        public int maxHP = 1;
+
+        /// <summary>
+        /// Indicates if the entity should be considered 'alive'.
+        /// </summary>
+        public bool IsAlive => currentHP > 0;
+
+        int currentHP;
+
+        /// <summary>
+        /// Increment the HP of the entity.
+        /// </summary>
+        public void Increment()
+        {
+            currentHP = Mathf.Clamp(currentHP + 1, 0, maxHP);
+            // Дублювання коду
+            if (currentHP == 0)
+            {
+                var ev = Schedule<HealthIsZero>();
+                ev.health = this;
+            }
+            else if (currentHP > maxHP)
+            {
+                currentHP = maxHP;
+            }
+            else if (currentHP < 0)
+            {
+                currentHP = 0;
+            }
+        }
+
+        /// <summary>
+        /// Decrement the HP of the entity. Will trigger a HealthIsZero event when
+        /// current HP reaches 0.
+        /// </summary>
+        public void Decrement()
+        {
+            currentHP = Mathf.Clamp(currentHP - 1, 0, maxHP);
+            // Дублювання коду
+            if (currentHP == 0)
+            {
+                var ev = Schedule<HealthIsZero>();
+                ev.health = this;
+            }
+            else if (currentHP > maxHP)
+            {
+                currentHP = maxHP;
+            }
+            else if (currentHP < 0)
+            {
+                currentHP = 0;
+            }
+        }
+
+        /// <summary>
+        /// Decrement the HP of the entity until HP reaches 0.
+        /// </summary>
+        public void Die()
+        {
+            while (currentHP > 0)
+            {
+                currentHP = Mathf.Clamp(currentHP - 1, 0, maxHP);
+                // Дублювання коду
+                if (currentHP == 0)
+                {
+                    var ev = Schedule<HealthIsZero>();
+                    ev.health = this;
+                }
+                else if (currentHP > maxHP)
+                {
+                    currentHP = maxHP;
+                }
+                else if (currentHP < 0)
+                {
+                    currentHP = 0;
+                }
+            }
+        }
+
+        void Awake()
+        {
+            currentHP = maxHP;
+            // Дублювання коду
+            if (currentHP == 0)
+            {
+                var ev = Schedule<HealthIsZero>();
+                ev.health = this;
+            }
+            else if (currentHP > maxHP)
+            {
+                currentHP = maxHP;
+            }
+            else if (currentHP < 0)
+            {
+                currentHP = 0;
+            }
+        }
+    }
+}
+
+
+```
+
+**Після**
+```csharp
+using System;
+using Platformer.Gameplay;
+using UnityEngine;
+using static Platformer.Core.Simulation;
+
+namespace Platformer.Mechanics
+{
+    /// <summary>
+    /// Represebts the current vital statistics of some game entity.
+    /// </summary>
+    public class Health : MonoBehaviour
+    {
+        /// <summary>
+        /// The maximum hit points for the entity.
+        /// </summary>
+        public int maxHP = 1;
+
+        /// <summary>
+        /// Indicates if the entity should be considered 'alive'.
+        /// </summary>
+        public bool IsAlive => currentHP > 0;
+
+        int currentHP;
+
+        /// <summary>
+        /// Increment the HP of the entity.
+        /// </summary>
+        public void Increment()
+        {
+            currentHP = Mathf.Clamp(currentHP + 1, 0, maxHP);
+        }
+
+        /// <summary>
+        /// Decrement the HP of the entity. Will trigger a HealthIsZero event when
+        /// current HP reaches 0.
+        /// </summary>
+        public void Decrement()
+        {
+            currentHP = Mathf.Clamp(currentHP - 1, 0, maxHP);
+            if (currentHP == 0)
+            {
+                var ev = Schedule<HealthIsZero>();
+                ev.health = this;
+            }
+        }
+
+        /// <summary>
+        /// Decrement the HP of the entitiy until HP reaches 0.
+        /// </summary>
+        public void Die()
+        {
+            while (currentHP > 0) Decrement();
+        }
+
+        void Awake()
+        {
+            currentHP = maxHP;
+        }
+    }
+}
 
 ```
 
